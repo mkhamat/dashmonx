@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 
@@ -10,7 +11,7 @@ class Dashmon {
   late Process _process;
   final List<String> args;
 
-  Future? _throttler;
+  Timer? _debounceTimer;
 
   final List<String> _proxiedArgs = [];
   final List<String> _watchDirs = ['./lib'];
@@ -64,11 +65,6 @@ class Dashmon {
     }
   }
 
-  Future<void> _runUpdate() async {
-    await Future.delayed(Duration(milliseconds: _debounceMs));
-    _process.stdin.write('r');
-  }
-
   void _processLine(String line) {
     print(colorize(line));
   }
@@ -80,8 +76,10 @@ class Dashmon {
   Future<void> start() async {
     // Check if flutter/fvm is available
     final command = _isFvm ? 'fvm' : 'flutter';
+    final whichCmd = Platform.isWindows ? 'where' : 'which';
     try {
-      await Process.run(command, ['--version'], runInShell: true);
+      final result = await Process.run(whichCmd, [command]);
+      if (result.exitCode != 0) throw ProcessException(command, []);
     } on ProcessException {
       print(red('Error: $command is not installed or not in PATH.'));
       if (_isFvm) {
@@ -96,7 +94,9 @@ class Dashmon {
 
     // Only show device picker if user hasn't specified a device
     if (!_hasDeviceArg) {
+      stdout.write(dim('Detecting devices...'));
       final devices = await getDevices(useFvm: _isFvm);
+      stdout.write('\r\x1b[2K');
 
       if (devices.length > 1) {
         final selectedDevice = await selectDevice(devices);
@@ -129,20 +129,24 @@ class Dashmon {
         : Process.start('flutter', [subcommand, ..._proxiedArgs],
             runInShell: true));
 
-    _process.stdout.transform(utf8.decoder).forEach(_processLine);
+    _process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .forEach(_processLine);
 
-    _process.stderr.transform(utf8.decoder).forEach(_processError);
+    _process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .forEach(_processError);
 
     for (final dir in _watchDirs) {
       final watcher = DirectoryWatcher(dir);
       watcher.events.listen((event) {
         if (event.path.endsWith('.dart')) {
-          if (_throttler == null) {
-            _throttler = _runUpdate();
-            _throttler?.then((_) {
-              _throttler = null;
-            });
-          }
+          _debounceTimer?.cancel();
+          _debounceTimer = Timer(Duration(milliseconds: _debounceMs), () {
+            _process.stdin.write('r');
+          });
         }
       });
     }
@@ -153,16 +157,19 @@ class Dashmon {
       ProcessSignal.sigterm.watch().listen((_) => _shutdown());
     }
 
-    stdin.echoMode = false;
-    stdin.lineMode = false;
-    stdin.transform(utf8.decoder).listen((input) {
-      if (input == 'c') {
-        // Clear terminal screen
-        stdout.write('\x1B[2J\x1B[H');
-      } else {
-        _process.stdin.write(input);
-      }
-    });
+    if (stdin.hasTerminal) {
+      stdin.echoMode = false;
+      stdin.lineMode = false;
+      stdin.transform(utf8.decoder).listen((input) {
+        if (input == 'q') {
+          _shutdown();
+        } else if (input == 'c') {
+          stdout.write('\x1B[2J\x1B[H');
+        } else {
+          _process.stdin.write(input);
+        }
+      });
+    }
     final exitCode = await _process.exitCode;
     stdout.write('\x1b]0;\x07');
     exit(exitCode);

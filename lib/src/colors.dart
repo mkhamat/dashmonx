@@ -34,7 +34,8 @@ String colorize(String line) {
   if (line.startsWith('Launching lib/') ||
       line.startsWith('Running Gradle') ||
       line.startsWith('Xcode build done') ||
-      line.startsWith('Built build/')) {
+      line.startsWith('Built build/') ||
+      line.contains('Restarted')) {
     return cyan(line);
   }
 
