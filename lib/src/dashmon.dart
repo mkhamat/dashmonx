@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:watcher/watcher.dart';
 
+import 'colors.dart';
 import 'device_selection.dart';
 
 class Dashmon {
@@ -16,6 +17,8 @@ class Dashmon {
   bool _isFvm = false;
   bool _isAttach = false;
   bool _hasDeviceArg = false;
+  int _debounceMs = 500;
+  String? _selectedDeviceName;
 
   Dashmon(this.args) {
     _parseArgs();
@@ -27,6 +30,14 @@ class Dashmon {
 
       if (arg == '--fvm') {
         _isFvm = true;
+        continue;
+      }
+
+      if (arg.startsWith('--debounce=')) {
+        final val = int.tryParse(arg.substring('--debounce='.length));
+        if (val != null && val > 0) {
+          _debounceMs = val;
+        }
         continue;
       }
 
@@ -54,23 +65,16 @@ class Dashmon {
   }
 
   Future<void> _runUpdate() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(Duration(milliseconds: _debounceMs));
     _process.stdin.write('r');
   }
 
-  void _print(String line) {
-    final trim = line.trim();
-    if (trim.isNotEmpty) {
-      print(trim);
-    }
-  }
-
   void _processLine(String line) {
-    _print(line);
+    print(colorize(line));
   }
 
   void _processError(String line) {
-    _print(line);
+    print(red(line));
   }
 
   Future<void> start() async {
@@ -79,11 +83,13 @@ class Dashmon {
     try {
       await Process.run(command, ['--version'], runInShell: true);
     } on ProcessException {
-      print('Error: $command is not installed or not in PATH.');
+      print(red('Error: $command is not installed or not in PATH.'));
       if (_isFvm) {
-        print('Install FVM: https://fvm.app/docs/getting_started/installation');
+        print(yellow(
+            'Install FVM: https://fvm.app/docs/getting_started/installation'));
       } else {
-        print('Install Flutter: https://docs.flutter.dev/get-started/install');
+        print(yellow(
+            'Install Flutter: https://docs.flutter.dev/get-started/install'));
       }
       exit(1);
     }
@@ -96,23 +102,31 @@ class Dashmon {
         final selectedDevice = await selectDevice(devices);
 
         if (selectedDevice == null) {
-          print('No device selected.');
+          print(yellow('No device selected.'));
           exit(1);
         }
 
         _proxiedArgs.add('-d');
         _proxiedArgs.add(selectedDevice.id);
+        _selectedDeviceName = selectedDevice.name;
       } else if (devices.length == 1) {
-        print('Using ${devices[0].name} (${devices[0].id})');
+        _selectedDeviceName = devices[0].name;
+        print('Using ${devices[0].name} ${dim('(${devices[0].id})')}');
       }
     }
 
+    // Set terminal title
+    final titleDevice = _selectedDeviceName ?? 'Flutter';
+    stdout.write('\x1b]0;dashmonx \u2014 $titleDevice\x07');
+
+    _printStartupSummary();
+
+    final subcommand = _isAttach ? 'attach' : 'run';
+
     _process = await (_isFvm
-        ? Process.start(
-            'fvm', ['flutter', _isAttach ? 'attach' : 'run', ..._proxiedArgs],
+        ? Process.start('fvm', ['flutter', subcommand, ..._proxiedArgs],
             runInShell: true)
-        : Process.start(
-            'flutter', [_isAttach ? 'attach' : 'run', ..._proxiedArgs],
+        : Process.start('flutter', [subcommand, ..._proxiedArgs],
             runInShell: true));
 
     _process.stdout.transform(utf8.decoder).forEach(_processLine);
@@ -126,7 +140,6 @@ class Dashmon {
           if (_throttler == null) {
             _throttler = _runUpdate();
             _throttler?.then((_) {
-              print('Sent reload request...');
               _throttler = null;
             });
           }
@@ -151,10 +164,26 @@ class Dashmon {
       }
     });
     final exitCode = await _process.exitCode;
+    stdout.write('\x1b]0;\x07');
     exit(exitCode);
   }
 
+  void _printStartupSummary() {
+    if (_selectedDeviceName != null) {
+      print('${dim('Device:')}    $_selectedDeviceName');
+    }
+    print('${dim('Mode:')}      ${_isAttach ? 'attach' : 'run'}');
+    print('${dim('Watching:')}   ${_watchDirs.join(', ')}');
+    if (_debounceMs != 500) {
+      print('${dim('Debounce:')}  ${_debounceMs}ms');
+    }
+    print(
+        '${dim('Shortcuts:')} r ${dim("reload")}  R ${dim("restart")}  c ${dim("clear")}  q ${dim("quit")}');
+    print('');
+  }
+
   void _shutdown() {
+    stdout.write('\x1b]0;\x07');
     _process.kill();
     exit(0);
   }

@@ -9,10 +9,11 @@ Usage: dashmonx [options] [flutter-run-args]
        dashmonx attach [options] [flutter-attach-args]
 
 Options:
-  -h, --help       Show this help message
-  -v, --version    Show version number
-  --fvm            Use FVM (Flutter Version Manager)
-  --watch=<dir>    Watch additional directory (can be used multiple times)
+  -h, --help          Show this help message
+  -v, --version       Show version number
+  --fvm               Use FVM (Flutter Version Manager)
+  --watch=<dir>       Watch additional directory (can be used multiple times)
+  --debounce=<ms>     Set debounce delay in ms (default: 500)
 
 Examples:
   dashmonx                       Run with auto hot reload
@@ -20,6 +21,7 @@ Examples:
   dashmonx --fvm                 Run using FVM
   dashmonx attach                Attach to running app
   dashmonx --watch=./test        Also watch test directory
+  dashmonx --debounce=200        Faster reload debounce
 
 Keyboard shortcuts:
   r    Hot reload (handled by Flutter)
@@ -41,7 +43,7 @@ void main(List<String> args) {
     return;
   }
 
-  print('Starting Dashmonx...');
+  print('${bold(cyan('dashmonx'))} ${dim('v$version')}');
   final dashmon = Dashmon(args);
   dashmon.start();
 }

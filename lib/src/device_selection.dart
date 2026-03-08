@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'colors.dart';
+
 class Device {
   Device({
     required this.id,
@@ -48,16 +50,16 @@ Future<List<Device>> getDevices({bool useFvm = false}) async {
 
 Future<Device?> selectDevice(List<Device> devices) async {
   if (devices.isEmpty) {
-    print('No devices found.');
+    print(yellow('No devices found.'));
     return null;
   }
 
-  print('Connected devices:');
+  print(cyan(bold('Connected devices:')));
   for (int i = 0; i < devices.length; i++) {
-    print('[${i + 1}]: ${devices[i].name} (${devices[i].id})');
+    print('  ${cyan('[${i + 1}]')} ${devices[i].name} ${dim('(${devices[i].id})')}');
   }
 
-  stdout.write('Please choose one (or "q" to quit): ');
+  stdout.write(dim('Please choose one (or "q" to quit): '));
 
   String input;
 
@@ -84,7 +86,7 @@ Future<Device?> selectDevice(List<Device> devices) async {
 
   final index = int.tryParse(input);
   if (index == null || index < 1 || index > devices.length) {
-    print('Invalid selection.');
+    print(red('Invalid selection.'));
     return null;
   }
 
