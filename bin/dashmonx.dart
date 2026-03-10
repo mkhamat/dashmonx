@@ -41,7 +41,7 @@ void main(List<String> args) {
     return;
   }
 
-  print('Starting Dashmonx...');
+  print('${bold(cyan('dashmonx'))} ${dim('v$version')}');
   final dashmon = Dashmon(args);
   dashmon.start();
 }
