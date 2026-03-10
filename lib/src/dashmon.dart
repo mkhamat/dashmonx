@@ -158,8 +158,9 @@ class Dashmon {
     stdin.echoMode = false;
     stdin.lineMode = false;
     stdin.transform(utf8.decoder).listen((input) {
-      if (input == 'c') {
-        // Clear terminal screen
+      if (input == 'q') {
+        _shutdown();
+      } else if (input == 'c') {
         stdout.write('\x1B[2J\x1B[H');
       } else {
         _process.stdin.write(input);
