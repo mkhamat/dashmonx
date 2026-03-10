@@ -19,6 +19,7 @@ class Dashmon {
   bool _isAttach = false;
   bool _hasDeviceArg = false;
   int _debounceMs = 500;
+  String? _selectedDeviceName;
 
   Dashmon(this.args) {
     _parseArgs();
@@ -75,8 +76,10 @@ class Dashmon {
   Future<void> start() async {
     // Check if flutter/fvm is available
     final command = _isFvm ? 'fvm' : 'flutter';
+    final whichCmd = Platform.isWindows ? 'where' : 'which';
     try {
-      await Process.run(command, ['--version'], runInShell: true);
+      final result = await Process.run(whichCmd, [command]);
+      if (result.exitCode != 0) throw ProcessException(command, []);
     } on ProcessException {
       print(red('Error: $command is not installed or not in PATH.'));
       if (_isFvm) {
@@ -89,7 +92,9 @@ class Dashmon {
 
     // Only show device picker if user hasn't specified a device
     if (!_hasDeviceArg) {
+      stdout.write(dim('Detecting devices...'));
       final devices = await getDevices(useFvm: _isFvm);
+      stdout.write('\r\x1b[2K');
 
       if (devices.length > 1) {
         final selectedDevice = await selectDevice(devices);
@@ -101,22 +106,36 @@ class Dashmon {
 
         _proxiedArgs.add('-d');
         _proxiedArgs.add(selectedDevice.id);
+        _selectedDeviceName = selectedDevice.name;
       } else if (devices.length == 1) {
+        _selectedDeviceName = devices[0].name;
         print('Using ${devices[0].name} ${dim('(${devices[0].id})')}');
       }
     }
 
+    // Set terminal title
+    final titleDevice = _selectedDeviceName ?? 'Flutter';
+    stdout.write('\x1b]0;dashmonx \u2014 $titleDevice\x07');
+
+    _printStartupSummary();
+
+    final subcommand = _isAttach ? 'attach' : 'run';
+
     _process = await (_isFvm
-        ? Process.start(
-            'fvm', ['flutter', _isAttach ? 'attach' : 'run', ..._proxiedArgs],
+        ? Process.start('fvm', ['flutter', subcommand, ..._proxiedArgs],
             runInShell: true)
-        : Process.start(
-            'flutter', [_isAttach ? 'attach' : 'run', ..._proxiedArgs],
+        : Process.start('flutter', [subcommand, ..._proxiedArgs],
             runInShell: true));
 
-    _process.stdout.transform(utf8.decoder).forEach(_processLine);
+    _process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .forEach(_processLine);
 
-    _process.stderr.transform(utf8.decoder).forEach(_processError);
+    _process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .forEach(_processError);
 
     for (final dir in _watchDirs) {
       final watcher = DirectoryWatcher(dir);
@@ -147,10 +166,26 @@ class Dashmon {
       }
     });
     final exitCode = await _process.exitCode;
+    stdout.write('\x1b]0;\x07');
     exit(exitCode);
   }
 
+  void _printStartupSummary() {
+    if (_selectedDeviceName != null) {
+      print('${dim('Device:')}    $_selectedDeviceName');
+    }
+    print('${dim('Mode:')}      ${_isAttach ? 'attach' : 'run'}');
+    print('${dim('Watching:')}   ${_watchDirs.join(', ')}');
+    if (_debounceMs != 500) {
+      print('${dim('Debounce:')}  ${_debounceMs}ms');
+    }
+    print(
+        '${dim('Shortcuts:')} r ${dim("reload")}  R ${dim("restart")}  c ${dim("clear")}  q ${dim("quit")}');
+    print('');
+  }
+
   void _shutdown() {
+    stdout.write('\x1b]0;\x07');
     _process.kill();
     exit(0);
   }
