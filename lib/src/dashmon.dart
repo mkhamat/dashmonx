@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:watcher/watcher.dart';
 
+import 'colors.dart';
 import 'device_selection.dart';
 
 class Dashmon {
@@ -66,11 +67,11 @@ class Dashmon {
   }
 
   void _processLine(String line) {
-    _print(line);
+    print(colorize(line));
   }
 
   void _processError(String line) {
-    _print(line);
+    print(red(line));
   }
 
   Future<void> start() async {
@@ -79,11 +80,11 @@ class Dashmon {
     try {
       await Process.run(command, ['--version'], runInShell: true);
     } on ProcessException {
-      print('Error: $command is not installed or not in PATH.');
+      print(red('Error: $command is not installed or not in PATH.'));
       if (_isFvm) {
-        print('Install FVM: https://fvm.app/docs/getting_started/installation');
+        print(yellow('Install FVM: https://fvm.app/docs/getting_started/installation'));
       } else {
-        print('Install Flutter: https://docs.flutter.dev/get-started/install');
+        print(yellow('Install Flutter: https://docs.flutter.dev/get-started/install'));
       }
       exit(1);
     }
@@ -96,14 +97,14 @@ class Dashmon {
         final selectedDevice = await selectDevice(devices);
 
         if (selectedDevice == null) {
-          print('No device selected.');
+          print(yellow('No device selected.'));
           exit(1);
         }
 
         _proxiedArgs.add('-d');
         _proxiedArgs.add(selectedDevice.id);
       } else if (devices.length == 1) {
-        print('Using ${devices[0].name} (${devices[0].id})');
+        print('Using ${devices[0].name} ${dim('(${devices[0].id})')}');
       }
     }
 
