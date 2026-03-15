@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 
@@ -10,13 +11,14 @@ class Dashmon {
   late Process _process;
   final List<String> args;
 
-  Future? _throttler;
+  Timer? _debounceTimer;
 
   final List<String> _proxiedArgs = [];
   final List<String> _watchDirs = ['./lib'];
   bool _isFvm = false;
   bool _isAttach = false;
   bool _hasDeviceArg = false;
+  int _debounceMs = 500;
 
   Dashmon(this.args) {
     _parseArgs();
@@ -28,6 +30,14 @@ class Dashmon {
 
       if (arg == '--fvm') {
         _isFvm = true;
+        continue;
+      }
+
+      if (arg.startsWith('--debounce=')) {
+        final val = int.tryParse(arg.substring('--debounce='.length));
+        if (val != null && val > 0) {
+          _debounceMs = val;
+        }
         continue;
       }
 
@@ -51,18 +61,6 @@ class Dashmon {
       }
 
       _proxiedArgs.add(arg);
-    }
-  }
-
-  Future<void> _runUpdate() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    _process.stdin.write('r');
-  }
-
-  void _print(String line) {
-    final trim = line.trim();
-    if (trim.isNotEmpty) {
-      print(trim);
     }
   }
 
@@ -124,13 +122,10 @@ class Dashmon {
       final watcher = DirectoryWatcher(dir);
       watcher.events.listen((event) {
         if (event.path.endsWith('.dart')) {
-          if (_throttler == null) {
-            _throttler = _runUpdate();
-            _throttler?.then((_) {
-              print('Sent reload request...');
-              _throttler = null;
-            });
-          }
+          _debounceTimer?.cancel();
+          _debounceTimer = Timer(Duration(milliseconds: _debounceMs), () {
+            _process.stdin.write('r');
+          });
         }
       });
     }
