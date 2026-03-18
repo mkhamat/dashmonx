@@ -6,6 +6,7 @@ import 'package:watcher/watcher.dart';
 
 import 'colors.dart';
 import 'device_selection.dart';
+import 'terminal.dart';
 
 class Dashmon {
   late Process _process;
@@ -83,9 +84,11 @@ class Dashmon {
     } on ProcessException {
       print(red('Error: $command is not installed or not in PATH.'));
       if (_isFvm) {
-        print(yellow('Install FVM: https://fvm.app/docs/getting_started/installation'));
+        print(yellow(
+            'Install FVM: https://fvm.app/docs/getting_started/installation'));
       } else {
-        print(yellow('Install Flutter: https://docs.flutter.dev/get-started/install'));
+        print(yellow(
+            'Install Flutter: https://docs.flutter.dev/get-started/install'));
       }
       exit(1);
     }
@@ -94,7 +97,7 @@ class Dashmon {
     if (!_hasDeviceArg) {
       stdout.write(dim('Detecting devices...'));
       final devices = await getDevices(useFvm: _isFvm);
-      stdout.write('\r\x1b[2K');
+      clearLine();
 
       if (devices.length > 1) {
         final selectedDevice = await selectDevice(devices);
@@ -115,7 +118,7 @@ class Dashmon {
 
     // Set terminal title
     final titleDevice = _selectedDeviceName ?? 'Flutter';
-    stdout.write('\x1b]0;dashmonx \u2014 $titleDevice\x07');
+    setTitle('dashmonx: $titleDevice');
 
     _printStartupSummary();
 
@@ -167,7 +170,7 @@ class Dashmon {
       }
     });
     final exitCode = await _process.exitCode;
-    stdout.write('\x1b]0;\x07');
+    resetTitle();
     exit(exitCode);
   }
 
@@ -186,7 +189,7 @@ class Dashmon {
   }
 
   void _shutdown() {
-    stdout.write('\x1b]0;\x07');
+    resetTitle();
     _process.kill();
     exit(0);
   }
