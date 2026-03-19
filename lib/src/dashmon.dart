@@ -164,7 +164,7 @@ class Dashmon {
       if (input == 'q') {
         _shutdown();
       } else if (input == 'c') {
-        stdout.write('\x1B[2J\x1B[H');
+        clearScreen();
       } else {
         _process.stdin.write(input);
       }
